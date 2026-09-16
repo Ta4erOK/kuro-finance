@@ -12,7 +12,7 @@
 ![SQLite](https://img.shields.io/badge/better--sqlite3-11-003B57?logo=sqlite&logoColor=white)
 ![Chart.js](https://img.shields.io/badge/Chart.js-4-FF6384?logo=chart.js&logoColor=white)
 ![Platform](https://img.shields.io/badge/Platform-Windows-0078D6?logo=windows&logoColor=white)
-![Release](https://img.shields.io/badge/release-v1.0.0-8b5cf6)
+![Release](https://img.shields.io/badge/release-v1.0.1-8b5cf6)
 
 </div>
 
@@ -24,7 +24,7 @@ KURO FINANCE — лёгкий виджет в стиле "ночного гор�
 
 Код-нейм **Kuro** — в честь японского *"чёрный"* (黒). Черный чай, ночные покатушки и ровная аналитика по деньгам.
 
-> **v1.0.0** — первый стабильный релиз. Скачать: [GitHub Releases](https://github.com/Ta4erOK/kuro-finance/releases)
+> **v1.0.1** — актуальный релиз. Скачать: [GitHub Releases](https://github.com/Ta4erOK/kuro-finance/releases)
 
 ## Возможности
 
@@ -105,7 +105,7 @@ npm run dev
 npm run build:win
 ```
 
-Готовый установщик появится в папке `release/` — `kuro-finance-setup-1.0.0.exe`.
+Готовый установщик появится в папке `release/` — `kuro-finance-setup-1.0.1.exe`.
 
 > Подпись кода отключена (`signAndEditExecutable: false`) — winCodeSign падает на симлинках без прав администратора. Windows может показывать «неизвестный издатель» при установке.
 
