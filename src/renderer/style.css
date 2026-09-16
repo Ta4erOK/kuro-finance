@@ -17,6 +17,15 @@
   --border: #3f3f5a;
 }
 
+[data-theme="light"] {
+  --bg: #f1f5f9;
+  --bg-card: #ffffff;
+  --bg-input: #f8fafc;
+  --text: #1e293b;
+  --text-dim: #64748b;
+  --border: #e2e8f0;
+}
+
 html, body, #app {
   height: 100%;
   font-family: 'Segoe UI', system-ui, sans-serif;

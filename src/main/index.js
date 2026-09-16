@@ -1,11 +1,17 @@
-const { app, BrowserWindow, ipcMain, shell } = require('electron')
+const { app, BrowserWindow, ipcMain, Tray, Menu, Notification } = require('electron')
 const path = require('path')
 const db = require('../db/database')
 
 let mainWindow = null
+let tray = null
+let forceQuit = false
 
 const DEV_URL = 'http://localhost:5173'
 
+// ======== Иконка для трея ========
+const ICON_PATH = path.join(__dirname, '..', '..', 'build', 'icon-256.png')
+
+// ======== СОЗДАНИЕ ОКНА ========
 function createWindow() {
   mainWindow = new BrowserWindow({
     width: 420,
@@ -17,7 +23,7 @@ function createWindow() {
     resizable: true,
     alwaysOnTop: false,
     autoHideMenuBar: true,
-    icon: path.join(__dirname, '..', '..', 'build', 'icon-512.png'),
+    icon: ICON_PATH,
     backgroundColor: '#1e1e2e',
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
@@ -25,9 +31,6 @@ function createWindow() {
       nodeIntegration: false
     }
   })
-
-  // Виджет-режим: компактное, поверх всех
-  mainWindow.setAlwaysOnTop(false)
 
   const devMode = !app.isPackaged && (process.env.NODE_ENV === 'development' || !process.env.KURO_PROD)
   console.log('[kuro] devMode:', devMode)
@@ -37,16 +40,118 @@ function createWindow() {
     mainWindow.loadFile(path.join(__dirname, '..', '..', 'dist', 'index.html'))
   }
 
+  // Поведение при закрытии: если в трее — скрываем, иначе выходим
+  mainWindow.on('close', (e) => {
+    const trayOn = db.getSetting('minimize_to_tray', 'false')
+    if (trayOn === 'true' && tray && !forceQuit) {
+      e.preventDefault()
+      mainWindow.hide()
+      return
+    }
+    if (!app.isPackaged) {
+      // dev: просто закрываем
+    }
+  })
+
   mainWindow.on('closed', () => { mainWindow = null })
 
-  // Для диагностики: автозакрытие через N секунд после готовности
+  // Selftest
   if (process.env.KURO_SELFTEST) {
     mainWindow.webContents.once('did-finish-load', () => {
       console.log('[kuro] SELFTEST: окно загрузилось, заголовок =', mainWindow.getTitle())
       setTimeout(() => app.exit(0), 1500)
     })
-    // если не загрузилось за 15 сек — падаем
-    setTimeout(() => { console.error('[kuro] SELFTEST: TIMEOUT загрузки'); app.exit(1) }, 15000)
+    setTimeout(() => { console.error('[kuro] SELFTEST: TIMEOUT'); app.exit(1) }, 15000)
+  }
+}
+
+// ======== ТРЕЙ ========
+function initTray() {
+  if (tray) return
+  try {
+    tray = new Tray(ICON_PATH)
+    tray.setToolTip('KURO FINANCE')
+    updateTrayMenu()
+    tray.on('click', () => {
+      if (mainWindow) {
+        if (mainWindow.isVisible()) mainWindow.hide()
+        else mainWindow.show()
+      }
+    })
+  } catch (e) {
+    console.error('[kuro] tray init error:', e.message)
+  }
+}
+
+function destroyTray() {
+  if (tray) { tray.destroy(); tray = null }
+}
+
+function updateTrayMenu() {
+  if (!tray) return
+  const menu = Menu.buildFromTemplate([
+    { label: 'KURO FINANCE', enabled: false },
+    { type: 'separator' },
+    { label: 'Показать', click: () => mainWindow && mainWindow.show() },
+    { label: 'Выход', click: () => { forceQuit = true; app.quit() } }
+  ])
+  tray.setContextMenu(menu)
+}
+
+// ======== УВЕДОМЛЕНИЯ (вечером) ========
+let notifTimer = null
+
+function startNotificationChecker() {
+  stopNotificationChecker()
+  notifTimer = setInterval(() => {
+    checkAndNotify()
+  }, 30000) // проверяем каждые 30 сек
+  checkAndNotify() // сразу
+}
+
+function stopNotificationChecker() {
+  if (notifTimer) { clearInterval(notifTimer); notifTimer = null }
+}
+
+function checkAndNotify() {
+  const enabled = db.getSetting('daily_notify', 'false')
+  if (enabled !== 'true') return
+  const time = db.getSetting('daily_notify_time', '21:00')
+  const [h, m] = time.split(':').map(Number)
+  const now = new Date()
+  if (now.getHours() === h && now.getMinutes() === m) {
+    const lastNotif = db.getSetting('last_daily_notif', '')
+    const today = now.toISOString().slice(0, 10)
+    if (lastNotif === today) return // уже показали сегодня
+    db.setSetting('last_daily_notif', today)
+    const total = db.getTotalByDate(today)
+    if (total === 0) { // не было трат — напоминаем
+      if (Notification.isSupported()) {
+        new Notification({
+          title: 'KURO FINANCE',
+          body: 'Не забудь записать траты дня!',
+          icon: ICON_PATH,
+          silent: true
+        }).show()
+      }
+    }
+  }
+}
+
+// ======== АВТО-БЭКАП ========
+function checkAutoBackup() {
+  const lastBackup = db.getSetting('last_backup_date', '')
+  const today = new Date().toISOString().slice(0, 10)
+  if (lastBackup === today) return
+  const lastDate = lastBackup ? new Date(lastBackup + 'T12:00:00') : null
+  if (lastDate) {
+    const diffDays = Math.floor((new Date(today + 'T12:00:00') - lastDate) / 86400000)
+    if (diffDays < 7) return
+  }
+  const dest = db.backupDatabase()
+  if (dest) {
+    db.setSetting('last_backup_date', today)
+    console.log('[kuro] auto-backup:', dest)
   }
 }
 
@@ -80,7 +185,15 @@ function applyAutoLaunch(on) {
 
 // ======== IPC: WINDOW ========
 ipcMain.handle('win:minimize', () => mainWindow && mainWindow.minimize())
-ipcMain.handle('win:close', () => mainWindow && mainWindow.close())
+ipcMain.handle('win:close', () => {
+  const trayOn = db.getSetting('minimize_to_tray', 'false')
+  if (trayOn === 'true') {
+    mainWindow && mainWindow.hide()
+  } else {
+    forceQuit = true
+    app.quit()
+  }
+})
 ipcMain.handle('win:getMode', () => ({ widget: db.getSetting('widget_mode', 'false') }))
 
 // ======== IPC: КАТЕГОРИИ ========
@@ -100,6 +213,7 @@ ipcMain.handle('exp:groupedByWeek', (_, start, end) => db.getGroupedByWeek(start
 ipcMain.handle('exp:groupedByMonth', (_, start, end) => db.getGroupedByMonth(start, end))
 ipcMain.handle('exp:groupedByCategory', (_, start, end) => db.getGroupedByCategory(start, end))
 ipcMain.handle('exp:delete', (_, id) => db.deleteExpense(id))
+ipcMain.handle('exp:update', (_, id, catId, amount, note, date) => db.updateExpense(id, catId, amount, note, date))
 
 // ======== IPC: КОПИЛКА ========
 ipcMain.handle('sav:add', (_, amount, note, date) => db.addSaving(amount, note, date))
@@ -109,7 +223,29 @@ ipcMain.handle('sav:byRange', (_, start, end) => db.getSavingsByRange(start, end
 ipcMain.handle('sav:totalByDate', (_, date) => db.getSavingsTotalByDate(date))
 ipcMain.handle('sav:totalByRange', (_, start, end) => db.getSavingsTotalByRange(start, end))
 ipcMain.handle('sav:groupedByDate', (_, start, end) => db.getSavingsGroupedByDate(start, end))
+ipcMain.handle('sav:groupedByMonth', (_, start, end) => db.getSavingsGroupedByMonth(start, end))
 ipcMain.handle('sav:delete', (_, id) => db.deleteSaving(id))
+ipcMain.handle('sav:update', (_, id, amount, note, date) => db.updateSaving(id, amount, note, date))
+
+// ======== IPC: ЦЕЛИ КОПИЛКИ ========
+ipcMain.handle('goal:list', () => db.getGoals())
+ipcMain.handle('goal:add', (_, name, target) => db.addGoal(name, target))
+ipcMain.handle('goal:update', (_, id, name, target) => db.updateGoal(id, name, target))
+ipcMain.handle('goal:delete', (_, id) => db.deleteGoal(id))
+
+// ======== IPC: ДОЛГИ ========
+ipcMain.handle('debt:list', () => db.getDebts())
+ipcMain.handle('debt:listWithPayments', () => db.getDebtsWithPayments())
+ipcMain.handle('debt:add', (_, name, total) => db.addDebt(name, total))
+ipcMain.handle('debt:update', (_, id, name, total) => db.updateDebt(id, name, total))
+ipcMain.handle('debt:delete', (_, id) => db.deleteDebt(id))
+ipcMain.handle('debt:pay', (_, debtId, amount, note, date) => db.addDebtPayment(debtId, amount, note, date))
+ipcMain.handle('debt:payDelete', (_, id) => db.deleteDebtPayment(id))
+ipcMain.handle('debt:payByDate', (_, date) => db.getDebtPaymentsByDate(date))
+ipcMain.handle('debt:payByRange', (_, start, end) => db.getDebtPaymentsByRange(start, end))
+ipcMain.handle('debt:totalPayByDate', (_, date) => db.getDebtTotalByDate(date))
+ipcMain.handle('debt:totalPayByRange', (_, start, end) => db.getDebtTotalByRange(start, end))
+ipcMain.handle('debt:totalOverall', () => db.getDebtTotalOverall())
 
 // ======== IPC: НАСТРОЙКИ ========
 ipcMain.handle('set:get', (_, key, def) => db.getSetting(key, def))
@@ -117,30 +253,48 @@ ipcMain.handle('set:set', (_, key, value) => {
   db.setSetting(key, value)
   if (key === 'widget_mode') applyWidgetMode(value)
   if (key === 'auto_launch') applyAutoLaunch(value)
+  if (key === 'minimize_to_tray') {
+    if (value === 'true') initTray(); else destroyTray()
+  }
   return true
 })
 
-// ======== IPC: СТАТИСТИКА / ИТОГИ ========
+// ======== IPC: СТАТИСТИКА ========
 ipcMain.handle('stats:month', (_, year, month) => db.getMonthSummary(year, month))
+ipcMain.handle('stats:groupedDebtByMonth', (_, start, end) => db.getDebtGroupedByMonth(start, end))
 
 // ======== IPC: СБРОС ========
 ipcMain.handle('reset:all', () => db.resetAll())
 
+// ======== IPC: БЭКАП ========
+ipcMain.handle('backup:run', () => db.backupDatabase())
+ipcMain.handle('backup:list', () => db.listBackups())
+
 // ======== ЖИЗНЕННЫЙ ЦИКЛ ========
 app.whenReady().then(() => {
-  // Применяем сохранённые настройки при старте
   const widgetMode = db.getSetting('widget_mode', 'false')
   const autoLaunch = db.getSetting('auto_launch', 'false')
+  const trayEnabled = db.getSetting('minimize_to_tray', 'false')
 
   createWindow()
   applyWidgetMode(widgetMode)
   if (autoLaunch === 'true') applyAutoLaunch(true)
+  if (trayEnabled === 'true') initTray()
+
+  // Уведомления
+  startNotificationChecker()
+
+  // Авто-бэкап
+  checkAutoBackup()
 
   app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) createWindow()
+    if (mainWindow) mainWindow.show()
+    else createWindow()
   })
 })
 
 app.on('window-all-closed', () => {
-  if (process.platform !== 'darwin') app.quit()
+  if (db.getSetting('minimize_to_tray', 'false') !== 'true') {
+    app.quit()
+  }
 })

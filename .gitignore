@@ -5,3 +5,4 @@ finance.db-wal
 finance.db-shm
 *.log
 .DS_Store
+backups/

@@ -1,263 +1,409 @@
 <script setup>
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, onMounted } from 'vue'
 
-const todayStr = new Date().toISOString().slice(0, 10)
-
-const categories = ref([])
 const expenses = ref([])
-const dayTotal = ref(0)
-const showNewCat = ref(false)
+const categories = ref([])
+const amount = ref('')
+const note = ref('')
+const selectedCat = ref('')
+const selectedDate = ref(new Date().toISOString().slice(0, 10))
+const showCatForm = ref(false)
 const newCatName = ref('')
+const loading = ref(false)
+const editingId = ref(null)
+const editAmount = ref('')
+const editNote = ref('')
+const editCat = ref('')
+const editDate = ref('')
 
-const formAmount = ref('')
-const formCategory = ref(null)
-const formNote = ref('')
-
-const viewDate = ref(todayStr)
+const dayTotal = ref(0)
 
 async function load() {
+  loading.value = true
   try {
-    const cats = await window.api.getCategories()
-    categories.value = cats
-    if (cats.length && !formCategory.value) {
-      formCategory.value = cats[0].id
-    }
-    await loadDate()
-  } catch (e) {
-    console.error('[kuro] ExpensesView load error:', e)
-  }
+    expenses.value = await window.api.getExpenses(selectedDate.value)
+    categories.value = await window.api.getCategories()
+    dayTotal.value = expenses.value.reduce((s, e) => s + e.amount, 0)
+  } catch (e) { console.error(e) }
+  loading.value = false
 }
 
-async function loadDate() {
-  expenses.value = await window.api.getExpensesByDate(viewDate.value)
-  dayTotal.value = await window.api.getTotalByDate(viewDate.value)
+function prevDay() {
+  const d = new Date(selectedDate.value)
+  d.setDate(d.getDate() - 1)
+  selectedDate.value = d.toISOString().slice(0, 10)
+  load()
 }
 
-function notifyChange() {
-  window.dispatchEvent(new CustomEvent('kuro:data-changed'))
+function nextDay() {
+  const d = new Date(selectedDate.value)
+  d.setDate(d.getDate() + 1)
+  selectedDate.value = d.toISOString().slice(0, 10)
+  load()
 }
 
 async function addExpense() {
-  const amount = parseFloat(formAmount.value)
-  if (!amount || amount <= 0) return
-  if (!formCategory.value) return
-  await window.api.addExpense(formCategory.value, amount, formNote.value.trim(), viewDate.value)
-  formAmount.value = ''
-  formNote.value = ''
-  await loadDate()
-  notifyChange()
+  if (!amount.value || !selectedCat.value) return
+  try {
+    await window.api.addExpense(selectedCat.value, parseFloat(amount.value), note.value, selectedDate.value)
+    amount.value = ''
+    note.value = ''
+    await load()
+    notifyChange()
+  } catch (e) { console.error(e) }
 }
 
 async function addCategory() {
-  const name = newCatName.value.trim()
-  if (!name) return
-  const res = await window.api.addCategory(name)
-  if (!res.exists) {
-    showNewCat.value = false
+  if (!newCatName.value.trim()) return
+  try {
+    await window.api.addCategory(newCatName.value.trim())
     newCatName.value = ''
-  }
-  const cats = await window.api.getCategories()
-  categories.value = cats
-  formCategory.value = res.id
+    showCatForm.value = false
+    await load()
+  } catch (e) { console.error(e) }
 }
 
 async function removeExpense(id) {
-  await window.api.deleteExpense(id)
-  await loadDate()
-  notifyChange()
+  try {
+    await window.api.removeExpense(id)
+    await load()
+    notifyChange()
+  } catch (e) { console.error(e) }
 }
 
-const isToday = computed(() => viewDate.value === todayStr)
-
-function shiftDay(delta) {
-  const d = new Date(viewDate.value + 'T12:00:00')
-  d.setDate(d.getDate() + delta)
-  viewDate.value = d.toISOString().slice(0, 10)
-  loadDate()
+function startEdit(exp) {
+  editingId.value = exp.id
+  editAmount.value = exp.amount
+  editNote.value = exp.note || ''
+  editCat.value = exp.category_id
+  editDate.value = exp.date
 }
 
-function formatDateLabel() {
-  const d = new Date(viewDate.value + 'T12:00:00')
-  return d.toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' })
+function cancelEdit() {
+  editingId.value = null
 }
 
-function money(v) {
-  return Number(v || 0).toLocaleString('ru-RU') + ' ₽'
+async function saveEdit(id) {
+  if (!editAmount.value || !editCat.value) return
+  try {
+    await window.api.updateExpense(id, editCat.value, parseFloat(editAmount.value), editNote.value, editDate.value)
+    editingId.value = null
+    await load()
+    notifyChange()
+  } catch (e) { console.error(e) }
+}
+
+function notifyChange() {
+  try { window.api.notifyChange() } catch {}
+}
+
+function fmtDate(d) {
+  return new Date(d).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric' })
+}
+
+function fmtMoney(v) {
+  return v.toLocaleString('ru-RU', { minimumFractionDigits: 2 }) + ' ₽'
+}
+
+function catName(id) {
+  const c = categories.value.find(c => c.id === id)
+  return c ? c.name : '—'
 }
 
 onMounted(load)
-watch(viewDate, () => loadDate())
 </script>
 
 <template>
-  <div class="expenses">
-    <!-- Навигация по дате -->
+  <div class="expenses-view">
     <div class="date-nav">
-      <button class="date-btn" @click="shiftDay(-1)">◀</button>
-      <div class="date-label">{{ formatDateLabel() }} <span v-if="!isToday" class="date-not-today">(не сегодня)</span></div>
-      <button class="date-btn" @click="shiftDay(1)" :disabled="isToday">▶</button>
+      <button class="nav-btn" @click="prevDay">◀</button>
+      <span class="nav-date">{{ fmtDate(selectedDate) }}</span>
+      <button class="nav-btn" @click="nextDay">▶</button>
     </div>
 
-    <!-- Форма добавления траты -->
     <div class="add-form">
       <div class="form-row">
-        <input
-          v-model="formAmount"
-          type="number"
-          step="0.01"
-          min="0"
-          placeholder="Сумма ₽"
-          class="input amount-input"
-          @keyup.enter="addExpense"
-        />
-        <select v-model="formCategory" class="input cat-select">
-          <option v-if="!categories.length" value="" disabled>Добавь категорию</option>
+        <input class="input" type="number" v-model="amount" placeholder="Сумма" min="0" step="0.01" />
+        <select class="input" v-model="selectedCat">
+          <option value="" disabled>Категория</option>
           <option v-for="c in categories" :key="c.id" :value="c.id">{{ c.name }}</option>
         </select>
-        <button class="btn-add" @click="addExpense" :disabled="!formAmount || !formCategory">Добавить</button>
       </div>
       <div class="form-row">
-        <input
-          v-model="formNote"
-          type="text"
-          placeholder="Комментарий (необязательно)"
-          class="input note-input"
-          @keyup.enter="addExpense"
-        />
+        <input class="input" type="text" v-model="note" placeholder="Заметка" />
+        <button class="btn-add" @click="addExpense">Добавить</button>
       </div>
-    </div>
-
-    <!-- Категория -->
-    <div class="new-cat-row">
-      <button v-if="!showNewCat" class="link-btn" @click="showNewCat = true">+ новая категория</button>
-      <div v-else class="new-cat-form">
-        <input v-model="newCatName" type="text" placeholder="Название" class="input" @keyup.enter="addCategory" />
+      <div class="cat-toggle" @click="showCatForm = !showCatForm">+ новая категория</div>
+      <div v-if="showCatForm" class="cat-form">
+        <input class="input" type="text" v-model="newCatName" placeholder="Название" />
         <button class="btn-small" @click="addCategory">OK</button>
-        <button class="btn-small btn-cancel" @click="showNewCat = false; newCatName = ''">✕</button>
       </div>
     </div>
 
-    <!-- Список трат дня -->
-    <div class="exp-list">
-      <div v-if="!expenses.length" class="empty">Пока пусто. Зафиксируй трату ↑</div>
-      <div v-for="e in expenses" :key="e.id" class="exp-item">
-        <span class="exp-dot" :style="{ background: e.category_color }"></span>
-        <div class="exp-info">
-          <div class="exp-name">{{ e.category_name }}</div>
-          <div v-if="e.note" class="exp-note">{{ e.note }}</div>
+    <div class="exp-list" v-if="expenses.length">
+      <div v-for="exp in expenses" :key="exp.id">
+        <div v-if="editingId !== exp.id" class="exp-item">
+          <div class="exp-main">
+            <span class="exp-cat">{{ catName(exp.category_id) }}</span>
+            <span class="exp-note" v-if="exp.note">{{ exp.note }}</span>
+          </div>
+          <div class="exp-bottom">
+            <span class="exp-amount">{{ fmtMoney(exp.amount) }}</span>
+            <div class="exp-actions">
+              <button class="btn-icon" @click="startEdit(exp)">✎</button>
+              <button class="btn-icon btn-red" @click="removeExpense(exp.id)">✕</button>
+            </div>
+          </div>
         </div>
-        <span class="exp-amount">−{{ money(e.amount) }}</span>
-        <button class="del-btn" @click="removeExpense(e.id)">✕</button>
+        <div v-else class="exp-item editing">
+          <div class="edit-row">
+            <input class="input" type="number" v-model="editAmount" placeholder="Сумма" step="0.01" />
+            <select class="input" v-model="editCat">
+              <option v-for="c in categories" :key="c.id" :value="c.id">{{ c.name }}</option>
+            </select>
+          </div>
+          <div class="edit-row">
+            <input class="input" type="text" v-model="editNote" placeholder="Заметка" />
+            <input class="input" type="date" v-model="editDate" />
+          </div>
+          <div class="edit-actions">
+            <button class="btn-small btn-ok" @click="saveEdit(exp.id)">OK</button>
+            <button class="btn-small" @click="cancelEdit">Отмена</button>
+          </div>
+        </div>
       </div>
     </div>
+    <div v-else class="empty" v-show="!loading">Нет расходов</div>
 
-    <!-- Итог за день -->
-    <div class="day-total">
-      <span>Итого за день</span>
-      <span class="day-total-value">−{{ money(dayTotal) }}</span>
+    <div class="day-total" v-if="expenses.length">
+      Итого: {{ fmtMoney(dayTotal) }}
     </div>
   </div>
 </template>
 
 <style scoped>
-.expenses { display: flex; flex-direction: column; height: 100%; gap: 8px; }
+.expenses-view {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
 
 .date-nav {
-  display: flex; align-items: center; justify-content: space-between;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
 }
-.date-btn {
-  width: 30px; height: 30px; border-radius: 8px;
-  background: var(--bg-input); color: var(--text);
-  font-size: 12px; transition: 0.15s;
-}
-.date-btn:hover { background: var(--border); }
-.date-btn:disabled { opacity: 0.3; cursor: default; }
-.date-label { font-size: 13px; font-weight: 600; text-transform: capitalize; }
-.date-not-today { font-size: 10px; color: var(--text-dim); font-weight: 400; }
 
-/* Форма */
+.nav-btn {
+  background: none;
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+  font-size: 16px;
+  width: 32px;
+  height: 32px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.nav-btn:hover {
+  background: var(--bg-input);
+  color: var(--text);
+}
+
+.nav-date {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+  min-width: 100px;
+  text-align: center;
+}
+
 .add-form {
   background: var(--bg-input);
   border-radius: 10px;
   padding: 10px;
-  display: flex; flex-direction: column; gap: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
-.form-row { display: flex; gap: 6px; }
-.form-row .input { flex: 1; }
-.amount-input { max-width: 110px; }
+
+.form-row {
+  display: flex;
+  gap: 8px;
+}
+
+.form-row .input {
+  flex: 1;
+}
 
 .input {
   background: var(--bg);
   border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 8px 10px;
+  border-radius: 6px;
+  padding: 6px 8px;
   color: var(--text);
   font-size: 13px;
+  outline: none;
   width: 100%;
+  transition: border-color 0.15s;
 }
-.input::placeholder { color: var(--text-dim); }
-.input:focus { border-color: var(--accent); }
+.input:focus {
+  border-color: var(--accent);
+}
 
 .btn-add {
-  background: var(--accent); color: #fff;
-  border-radius: 8px; padding: 0 16px;
-  font-size: 12px; font-weight: 600;
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  padding: 6px 14px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.15s;
   white-space: nowrap;
-  transition: 0.15s;
 }
 .btn-add:hover { opacity: 0.85; }
-.btn-add:disabled { opacity: 0.4; cursor: default; }
 
-/* Категория */
-.new-cat-row { }
-.link-btn { color: var(--accent); font-size: 11px; }
-.new-cat-form { display: flex; gap: 6px; }
-.new-cat-form .input { flex: 1; padding: 6px 8px; font-size: 12px; }
 .btn-small {
-  background: var(--accent); color: #fff;
-  border-radius: 6px; padding: 0 12px; font-size: 12px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: 6px;
+  padding: 5px 12px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: background 0.15s;
 }
-.btn-cancel { background: var(--bg-input); color: var(--text-dim); }
+.btn-small:hover { background: var(--border); }
 
-/* Список трат */
-.exp-list {
+.btn-ok {
+  background: var(--green);
+  color: #fff;
+  border: none;
+}
+.btn-ok:hover { opacity: 0.85; }
+
+.cat-toggle {
+  font-size: 12px;
+  color: var(--accent);
+  cursor: pointer;
+  user-select: none;
+  padding: 2px 0;
+}
+.cat-toggle:hover { opacity: 0.8; }
+
+.cat-form {
+  display: flex;
+  gap: 8px;
+}
+
+.cat-form .input {
   flex: 1;
-  overflow-y: auto;
-  display: flex; flex-direction: column; gap: 4px;
 }
-.empty {
-  color: var(--text-dim); font-size: 12px; text-align: center;
-  padding: 30px 0;
+
+.exp-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
 }
+
 .exp-item {
-  display: flex; align-items: center; gap: 8px;
   background: var(--bg-input);
   border-radius: 8px;
   padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
 }
-.exp-dot {
-  width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0;
-}
-.exp-info { flex: 1; overflow: hidden; }
-.exp-name { font-size: 13px; }
-.exp-note { font-size: 11px; color: var(--text-dim); }
-.exp-amount { font-size: 13px; font-weight: 600; color: var(--red); flex-shrink: 0; }
-.del-btn {
-  color: var(--text-dim); font-size: 11px;
-  padding: 2px 6px; border-radius: 4px;
-}
-.del-btn:hover { color: var(--red); background: var(--bg); }
 
-/* Итог */
+.exp-main {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.exp-cat {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.exp-note {
+  font-size: 12px;
+  color: var(--text-dim);
+}
+
+.exp-bottom {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.exp-amount {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--accent);
+}
+
+.exp-actions {
+  display: flex;
+  gap: 4px;
+}
+
+.btn-icon {
+  background: none;
+  border: none;
+  color: var(--text-dim);
+  font-size: 14px;
+  cursor: pointer;
+  padding: 2px 5px;
+  border-radius: 4px;
+  transition: color 0.15s, background 0.15s;
+}
+.btn-icon:hover {
+  background: var(--border);
+  color: var(--text);
+}
+
+.btn-red:hover {
+  color: var(--red);
+}
+
+.exp-item.editing {
+  gap: 6px;
+}
+
+.edit-row {
+  display: flex;
+  gap: 8px;
+}
+
+.edit-row .input {
+  flex: 1;
+}
+
+.edit-actions {
+  display: flex;
+  gap: 6px;
+  justify-content: flex-end;
+}
+
+.empty {
+  text-align: center;
+  color: var(--text-dim);
+  font-size: 13px;
+  padding: 20px 0;
+}
+
 .day-total {
-  display: flex; justify-content: space-between; align-items: center;
   background: var(--bg);
   border-radius: 10px;
-  padding: 10px 14px;
-  font-size: 13px;
-  flex-shrink: 0;
-}
-.day-total-value {
-  font-size: 16px; font-weight: 800; color: var(--red);
+  padding: 10px;
+  text-align: center;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--accent);
 }
 </style>

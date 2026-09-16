@@ -2,29 +2,45 @@
 import { ref, onMounted } from 'vue'
 
 const income = ref('')
+const budgetLimit = ref('')
 const widgetMode = ref(false)
 const autoLaunch = ref(false)
-const status = ref('')
-
-// ===== Категории =====
+const minimizeToTray = ref(false)
+const dailyNotify = ref(false)
+const dailyNotifyTime = ref('21:00')
+const theme = ref('dark')
 const categories = ref([])
-const editingId = ref(null)          // id категории в режиме редактирования
+const backups = ref([])
+const editingId = ref(null)
 const editName = ref('')
 const editColor = ref('')
 const showAddCat = ref(false)
 const newCatName = ref('')
+const status = ref('')
+const statusOk = ref(true)
 
 const PRESET_COLORS = ['#ef4444', '#f59e0b', '#10b981', '#3b82f6', '#8b5cf6', '#ec4899', '#14b8a6', '#f97316']
 
 async function load() {
   income.value = (await window.api.getSetting('income', '0')) || '0'
+  budgetLimit.value = (await window.api.getSetting('budget_limit', '0')) || '0'
   widgetMode.value = (await window.api.getSetting('widget_mode', 'false')) === 'true'
   autoLaunch.value = (await window.api.getSetting('auto_launch', 'false')) === 'true'
+  minimizeToTray.value = (await window.api.getSetting('minimize_to_tray', 'false')) === 'true'
+  dailyNotify.value = (await window.api.getSetting('daily_notify', 'false')) === 'true'
+  dailyNotifyTime.value = (await window.api.getSetting('daily_notify_time', '21:00')) || '21:00'
+  theme.value = (await window.api.getSetting('theme', 'dark')) || 'dark'
+  document.documentElement.setAttribute('data-theme', theme.value)
   await loadCategories()
+  await loadBackups()
 }
 
 async function loadCategories() {
   categories.value = await window.api.getCategories()
+}
+
+async function loadBackups() {
+  try { backups.value = await window.api.listBackups() } catch { backups.value = [] }
 }
 
 function flash(msg, ok = true) {
@@ -32,10 +48,8 @@ function flash(msg, ok = true) {
   statusOk.value = ok
   setTimeout(() => { status.value = '' }, 2000)
 }
-const statusOk = ref(true)
 
-// ===== Кастомный confirm =====
-const confirmBox = ref(null) // { title, message, okText, danger }
+const confirmBox = ref(null)
 let confirmResolve = null
 
 function askConfirm(title, message, okText = 'Да', danger = true) {
@@ -66,6 +80,15 @@ async function saveIncome() {
   flash('Доход сохранён')
 }
 
+async function saveBudgetLimit() {
+  let v = parseFloat(budgetLimit.value)
+  if (isNaN(v) || v < 0) v = 0
+  await window.api.setSetting('budget_limit', String(v))
+  budgetLimit.value = String(v)
+  window.dispatchEvent(new CustomEvent('kuro:data-changed'))
+  flash('Лимит сохранён')
+}
+
 async function toggleWidget() {
   widgetMode.value = !widgetMode.value
   await window.api.setSetting('widget_mode', String(widgetMode.value))
@@ -78,7 +101,46 @@ async function toggleAutoLaunch() {
   flash(autoLaunch.value ? 'Автозапуск ВКЛ' : 'Автозапуск ВЫКЛ')
 }
 
-// ===== Категории: действия =====
+async function toggleMinimizeToTray() {
+  minimizeToTray.value = !minimizeToTray.value
+  await window.api.setSetting('minimize_to_tray', String(minimizeToTray.value))
+  flash(minimizeToTray.value ? 'Сворачивать в трей ВКЛ' : 'Сворачивать в трей ВЫКЛ')
+}
+
+async function toggleDailyNotify() {
+  dailyNotify.value = !dailyNotify.value
+  await window.api.setSetting('daily_notify', String(dailyNotify.value))
+  flash(dailyNotify.value ? 'Напоминание ВКЛ' : 'Напоминание ВЫКЛ')
+}
+
+async function saveNotifyTime() {
+  await window.api.setSetting('daily_notify_time', dailyNotifyTime.value)
+  flash('Время напоминания сохранено')
+}
+
+async function setTheme(t) {
+  theme.value = t
+  document.documentElement.setAttribute('data-theme', t)
+  await window.api.setSetting('theme', t)
+  flash(t === 'dark' ? 'Тёмная тема' : 'Светлая тема')
+}
+
+async function createBackup() {
+  try {
+    await window.api.runBackup()
+    await loadBackups()
+    flash('Бэкап создан')
+  } catch (e) {
+    flash('Ошибка бэкапа', false)
+  }
+}
+
+function formatSize(bytes) {
+  if (bytes < 1024) return bytes + ' Б'
+  if (bytes < 1048576) return (bytes / 1024).toFixed(1) + ' КБ'
+  return (bytes / 1048576).toFixed(1) + ' МБ'
+}
+
 function startEdit(cat) {
   editingId.value = cat.id
   editName.value = cat.name
@@ -122,19 +184,25 @@ async function addCategory() {
   flash('Категория добавлена')
 }
 
-// ===== Сброс =====
 async function resetAll() {
   const ok = await askConfirm(
     'Сбросить ВСЕ данные?',
-    'Будут удалены: все траты, вся копилка, все категории и месячный доход. Восстановить нельзя!',
+    'Будут удалены: все траты, вся копилка, все долги, категории и месячный доход.\nВосстановить нельзя!',
     'Сбросить всё'
   )
   if (!ok) return
+  const ok2 = await askConfirm(
+    'Вы уверены?',
+    'Это действие необратимо. Все данные будут удалены без возможности восстановления.',
+    'Да, сбросить'
+  )
+  if (!ok2) return
   await window.api.resetAll()
   income.value = '0'
+  budgetLimit.value = '0'
   await loadCategories()
   window.dispatchEvent(new CustomEvent('kuro:data-changed'))
-  flash('Все данные сброшены. Чистый лист ✓', true)
+  flash('Все данные сброшены')
 }
 
 onMounted(load)
@@ -142,7 +210,7 @@ onMounted(load)
 
 <template>
   <div class="settings">
-    <!-- Доход -->
+    <!-- 1. Доход -->
     <div class="setting-card">
       <label class="setting-label">Месячный доход (₽)</label>
       <div class="row">
@@ -151,54 +219,63 @@ onMounted(load)
       </div>
     </div>
 
-    <!-- Категории -->
+    <!-- 2. Лимит бюджета -->
+    <div class="setting-card">
+      <label class="setting-label">Лимит бюджета (₽)</label>
+      <div class="row">
+        <input v-model="budgetLimit" type="number" min="0" step="100" class="input" @keyup.enter="saveBudgetLimit" />
+        <button class="btn-save" @click="saveBudgetLimit">OK</button>
+      </div>
+    </div>
+
+    <!-- 3. Категории -->
     <div class="setting-card">
       <div class="card-header">
         <span class="setting-label cat-label">Категории</span>
         <button v-if="!showAddCat" class="link-btn" @click="showAddCat = true">+ добавить</button>
       </div>
 
-      <!-- Добавление -->
       <div v-if="showAddCat" class="add-cat-form">
         <input v-model="newCatName" type="text" placeholder="Название категории" class="input input-sm" @keyup.enter="addCategory" />
         <button class="btn-small" @click="addCategory">OK</button>
         <button class="btn-small btn-ghost" @click="showAddCat = false; newCatName = ''">✕</button>
       </div>
 
-      <!-- Список -->
       <div v-if="!categories.length && !showAddCat" class="cats-empty">Категорий нет — добавь первую</div>
 
       <div v-for="c in categories" :key="c.id" class="cat-item">
-        <!-- Режим просмотра -->
         <template v-if="editingId !== c.id">
           <span class="cat-dot" :style="{ background: c.color }"></span>
           <span class="cat-name">{{ c.name }}</span>
           <div class="cat-actions">
             <button class="mini-btn" @click="startEdit(c)">✎</button>
-            <button class="mini-btn danger" @click="removeCategory(c)">🗑</button>
+            <button class="mini-btn danger" @click="removeCategory(c)">✕</button>
           </div>
         </template>
 
-        <!-- Режим редактирования -->
         <template v-else>
-          <input v-model="editName" type="text" class="input input-sm cat-edit-name" @keyup.enter="saveEdit" />
-          <div class="color-row">
-            <button
-              v-for="col in PRESET_COLORS"
-              :key="col"
-              class="color-dot"
-              :class="{ selected: editColor === col }"
-              :style="{ background: col }"
-              @click="editColor = col"
-            ></button>
+          <div class="edit-block">
+            <input v-model="editName" type="text" class="input input-sm cat-edit-name" @keyup.enter="saveEdit" />
+            <div class="color-row">
+              <button
+                v-for="col in PRESET_COLORS"
+                :key="col"
+                class="color-dot"
+                :class="{ selected: editColor === col }"
+                :style="{ background: col }"
+                @click="editColor = col"
+              ></button>
+            </div>
+            <div class="edit-row-btns">
+              <button class="btn-small" @click="saveEdit">OK</button>
+              <button class="btn-small btn-ghost" @click="cancelEdit">✕</button>
+            </div>
           </div>
-          <button class="btn-small" @click="saveEdit">OK</button>
-          <button class="btn-small btn-ghost" @click="cancelEdit">✕</button>
         </template>
       </div>
     </div>
 
-    <!-- Виджет -->
+    <!-- 4. Виджет-режим -->
     <div class="setting-card">
       <div class="setting-toggle" @click="toggleWidget">
         <div>
@@ -209,25 +286,74 @@ onMounted(load)
       </div>
     </div>
 
-    <!-- Автозапуск -->
+    <!-- 5. Автозапуск -->
     <div class="setting-card">
       <div class="setting-toggle" @click="toggleAutoLaunch">
         <div>
           <div class="setting-name">Автозапуск с Windows</div>
-          <div class="setting-desc">Запускать при входе в систему</div>
         </div>
         <div class="switch" :class="{ on: autoLaunch }"><span></span></div>
       </div>
     </div>
 
-    <!-- Сброс -->
+    <!-- 6. Сворачивать в трей -->
+    <div class="setting-card">
+      <div class="setting-toggle" @click="toggleMinimizeToTray">
+        <div>
+          <div class="setting-name">Сворачивать в трей</div>
+          <div class="setting-desc">При закрытии окно сворачивается в трей</div>
+        </div>
+        <div class="switch" :class="{ on: minimizeToTray }"><span></span></div>
+      </div>
+    </div>
+
+    <!-- 7. Напоминание вечером -->
+    <div class="setting-card">
+      <div class="setting-toggle" @click="toggleDailyNotify">
+        <div>
+          <div class="setting-name">Напоминание вечером</div>
+          <div class="setting-desc">Напоминание записать траты</div>
+        </div>
+        <div class="switch" :class="{ on: dailyNotify }"><span></span></div>
+      </div>
+      <div v-if="dailyNotify" class="notify-time-row">
+        <label class="time-label">Время:</label>
+        <input v-model="dailyNotifyTime" type="time" class="input input-time" @change="saveNotifyTime" />
+      </div>
+    </div>
+
+    <!-- 8. Тема -->
+    <div class="setting-card">
+      <label class="setting-label">Тема оформления</label>
+      <div class="theme-row">
+        <button class="theme-btn" :class="{ active: theme === 'dark' }" @click="setTheme('dark')">Тёмная</button>
+        <button class="theme-btn" :class="{ active: theme === 'light' }" @click="setTheme('light')">Светлая</button>
+      </div>
+    </div>
+
+    <!-- 9. Бэкап данных -->
+    <div class="setting-card">
+      <label class="setting-label">Бэкап данных</label>
+      <button class="btn-backup" @click="createBackup">Создать бэкап</button>
+      <div v-if="backups.length" class="backup-list">
+        <div v-for="b in backups" :key="b.name" class="backup-item">
+          <span class="backup-name">{{ b.name }}</span>
+          <span class="backup-size">{{ formatSize(b.size) }}</span>
+        </div>
+      </div>
+      <div v-else class="backup-empty">Бэкапов пока нет</div>
+    </div>
+
+    <!-- 10. Сброс данных -->
     <div class="setting-card danger-card">
       <div class="setting-name">Сброс данных</div>
-      <div class="setting-desc">Удалить все траты, копилку, категории и доход</div>
+      <div class="setting-desc">Удалить все траты, копилку, долги, категории и доход</div>
       <button class="btn-reset" @click="resetAll">Сбросить все данные</button>
     </div>
 
-    <div class="about">KURO FINANCE · v1.0 · лучше утром, чем никогда</div>
+    <!-- 11. Footer -->
+    <div class="footer">KURO FINANCE · v1.0</div>
+
     <div v-if="status" class="status" :class="{ err: !statusOk }">{{ status }}</div>
 
     <!-- Модальный confirm -->
@@ -267,7 +393,7 @@ onMounted(load)
 .row { display: flex; gap: 6px; }
 .input {
   flex: 1;
-  background: var(--bg-input);
+  background: var(--bg);
   border: 1px solid var(--border);
   border-radius: 8px;
   padding: 8px 10px;
@@ -312,15 +438,18 @@ onMounted(load)
 .mini-btn:hover { color: var(--text); background: var(--border); }
 .mini-btn.danger:hover { color: var(--red); }
 
-.cat-edit-name { flex: 1; min-width: 60px; }
+.edit-block { display: flex; flex-direction: column; gap: 6px; flex: 1; }
+.cat-edit-name { width: 100%; }
 .color-row { display: flex; gap: 4px; }
 .color-dot {
   width: 16px; height: 16px;
   border-radius: 50%;
   border: 2px solid transparent;
   transition: 0.15s;
+  cursor: pointer;
 }
 .color-dot.selected { border-color: #fff; transform: scale(1.15); }
+.edit-row-btns { display: flex; gap: 4px; }
 
 /* Тумблеры */
 .setting-toggle {
@@ -331,7 +460,7 @@ onMounted(load)
 .setting-desc { font-size: 11px; color: var(--text-dim); margin-top: 2px; }
 
 .switch {
-  width: 40px; height: 22px;
+  width: 38px; height: 22px;
   background: var(--bg-input);
   border: 1px solid var(--border);
   border-radius: 11px;
@@ -348,7 +477,61 @@ onMounted(load)
   transition: 0.2s;
 }
 .switch.on { background: var(--accent); border-color: var(--accent); }
-.switch.on span { left: 20px; background: #fff; }
+.switch.on span { left: 18px; background: #fff; }
+
+/* Напоминание */
+.notify-time-row {
+  display: flex; align-items: center; gap: 8px;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+}
+.time-label { font-size: 12px; color: var(--text-dim); }
+.input-time {
+  width: 90px;
+  flex: none;
+  font-size: 12px;
+}
+
+/* Тема */
+.theme-row { display: flex; gap: 6px; }
+.theme-btn {
+  flex: 1;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px;
+  font-size: 12px; font-weight: 600;
+  color: var(--text-dim);
+  transition: 0.15s;
+}
+.theme-btn:hover { border-color: var(--accent); color: var(--text); }
+.theme-btn.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+
+/* Бэкапы */
+.btn-backup {
+  width: 100%;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px;
+  font-size: 12px; font-weight: 600;
+  color: var(--accent);
+  margin-bottom: 8px;
+  transition: 0.15s;
+}
+.btn-backup:hover { border-color: var(--accent); }
+.backup-list { display: flex; flex-direction: column; gap: 2px; }
+.backup-item {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 4px 0;
+  border-bottom: 1px solid rgba(63,63,90,0.3);
+  font-size: 11px;
+}
+.backup-item:last-child { border-bottom: none; }
+.backup-name { color: var(--text); }
+.backup-size { color: var(--text-dim); }
+.backup-empty { font-size: 11px; color: var(--text-dim); padding: 4px 0; }
 
 /* Сброс */
 .danger-card { border: 1px solid rgba(239,68,68,0.3); }
@@ -365,7 +548,8 @@ onMounted(load)
 }
 .btn-reset:hover { background: var(--red); color: #fff; }
 
-.about {
+/* Footer */
+.footer {
   text-align: center;
   font-size: 10px; color: var(--text-dim);
   margin-top: 6px;
