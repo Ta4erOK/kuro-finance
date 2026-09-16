@@ -2,18 +2,20 @@ const path = require('path')
 const fs = require('fs')
 const Database = require('better-sqlite3')
 
-// Путь к БД: в dev — в папке проекта, в проде — в userData
+// Путь к БД: в dev — в папке проекта, в проде — в userData (НЕ внутрь app.asar!)
 function getDbPath() {
-  if (process.env.NODE_ENV === 'production' || process.env.APPIMAGE) {
-    const userData = (process.env.APPDATA || '').split(path.sep).slice(0, 2).join(path.sep) || require('os').homedir()
-    const base = process.env.APPDATA || path.join(userData, 'AppData', 'Roaming')
-    return path.join(base, 'FinanceWidget', 'finance.db')
+  const electron = (() => { try { return require('electron') } catch (e) { return null } })()
+  const app = electron && typeof electron === 'object' && electron.app ? electron.app : null
+  if (app && app.isPackaged) {
+    return path.join(app.getPath('userData'), 'finance.db')
   }
   return path.join(__dirname, '..', '..', 'finance.db')
 }
 
 const dbPath = getDbPath()
-fs.mkdirSync(path.dirname(dbPath), { recursive: true })
+if (!fs.existsSync(path.dirname(dbPath))) {
+  fs.mkdirSync(path.dirname(dbPath), { recursive: true })
+}
 
 const db = new Database(dbPath)
 db.pragma('journal_mode = WAL')
