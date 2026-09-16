@@ -4,39 +4,42 @@
       <stop offset="0" stop-color="#262640"/>
       <stop offset="1" stop-color="#0e0e16"/>
     </linearGradient>
-    <linearGradient id="coin" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#a78bfa"/>
-      <stop offset="0.5" stop-color="#8b5cf6"/>
-      <stop offset="1" stop-color="#6d28d9"/>
+    <linearGradient id="area" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#10b981" stop-opacity="0.45"/>
+      <stop offset="1" stop-color="#10b981" stop-opacity="0.02"/>
     </linearGradient>
-    <linearGradient id="glow" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#10b981" stop-opacity="0.35"/>
+    <linearGradient id="lineGlow" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#34d399" stop-opacity="0.35"/>
       <stop offset="1" stop-color="#10b981" stop-opacity="0"/>
     </linearGradient>
     <filter id="shadow" x="-30%" y="-30%" width="160%" height="160%">
-      <feDropShadow dx="0" dy="6" stdDeviation="10" flood-color="#000" flood-opacity="0.6"/>
+      <feDropShadow dx="0" dy="4" stdDeviation="8" flood-color="#10b981" flood-opacity="0.25"/>
     </filter>
   </defs>
 
   <!-- Фон -->
   <rect width="512" height="512" rx="96" fill="url(#bg)"/>
 
-  <!-- Полумесяц / ночной вайб -->
-  <circle cx="392" cy="120" r="30" fill="#e2e8f0" opacity="0.9"/>
-  <circle cx="380" cy="112" r="30" fill="#262640"/>
+  <!-- Полумесяц -->
+  <circle cx="392" cy="110" r="28" fill="#e2e8f0" opacity="0.9"/>
+  <circle cx="380" cy="102" r="28" fill="#262640"/>
 
-  <!-- Свечение графика снизу -->
-  <rect x="120" y="330" width="272" height="120" fill="url(#glow)"/>
+  <!-- Свечение под графиком -->
+  <rect x="80" y="330" width="352" height="110" fill="url(#lineGlow)"/>
 
-  <!-- График роста -->
-  <path d="M140 400 L200 400 L230 352 L270 372 L320 300 L372 300" stroke="#10b981" stroke-width="14" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
-  <path d="M340 272 L376 300 L346 302 Z" fill="#10b981"/>
+  <!-- Площадь под графиком -->
+  <path d="M96 396 L168 336 L232 358 L296 276 L356 220 L416 236 L416 440 L96 440 Z" fill="url(#area)"/>
 
-  <!-- Монета -->
-  <circle cx="256" cy="250" r="120" fill="url(#coin)" filter="url(#shadow)"/>
-  <circle cx="256" cy="250" r="120" fill="none" stroke="#d8c7ff" stroke-opacity="0.4" stroke-width="6"/>
-  <circle cx="256" cy="250" r="102" fill="none" stroke="#ffffff" stroke-opacity="0.25" stroke-width="3"/>
+  <!-- Линия графика -->
+  <path d="M96 396 L168 336 L232 358 L296 276 L356 220 L416 236" stroke="#10b981" stroke-width="16" stroke-linecap="round" stroke-linejoin="round" fill="none" filter="url(#shadow)"/>
 
-  <!-- Буква K -->
-  <path d="M222 322 L222 178 L238 178 L238 238 L288 178 L311 178 L268 224 L314 322 L290 322 L250 232 L238 244 L238 322 Z" fill="#ffffff"/>
+  <!-- Точки на графике -->
+  <circle cx="168" cy="336" r="10" fill="#34d399"/>
+  <circle cx="232" cy="358" r="10" fill="#34d399"/>
+  <circle cx="296" cy="276" r="10" fill="#34d399"/>
+  <circle cx="356" cy="220" r="10" fill="#34d399"/>
+
+  <!-- Стрелка роста -->
+  <path d="M332 178 L407 178 L407 253" stroke="#34d399" stroke-width="16" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+  <path d="M407 158 L441 198 L373 198 Z" fill="#34d399"/>
 </svg>

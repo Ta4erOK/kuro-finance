@@ -63,9 +63,14 @@ function createCategory(name, color = '#8b5cf6') {
 }
 
 function deleteCategory(id) {
-  // Не даём удалить категорию, если на ней висят траты — просто помечаем удаление через каскад вручную
+  // Каскадом удаляем траты, висящие на категории
   db.prepare('DELETE FROM expenses WHERE category_id = ?').run(id)
   db.prepare('DELETE FROM categories WHERE id = ?').run(id)
+}
+
+function updateCategory(id, name, color) {
+  db.prepare('UPDATE categories SET name = ?, color = ? WHERE id = ?').run(name, color, id)
+  return { id }
 }
 
 // ======== ТРАТЫ ========
@@ -231,11 +236,22 @@ function getMonthSummary(year, month) {
   }
 }
 
+// ======== ПОЛНЫЙ СБРОС ========
+function resetAll() {
+  db.prepare('DELETE FROM expenses').run()
+  db.prepare('DELETE FROM savings').run()
+  db.prepare('DELETE FROM categories').run()
+  db.prepare('DELETE FROM settings WHERE key = ?').run('income')
+  db.exec('DELETE FROM sqlite_sequence WHERE name IN (?, ?, ?, ?)', ['categories', 'expenses', 'savings', 'settings'])
+  return true
+}
+
 module.exports = {
   db,
   getCategories,
   createCategory,
   deleteCategory,
+  updateCategory,
   addExpense,
   getExpensesByDate,
   getExpensesByRange,
@@ -256,5 +272,6 @@ module.exports = {
   deleteSaving,
   getSetting,
   setSetting,
-  getMonthSummary
+  getMonthSummary,
+  resetAll
 }

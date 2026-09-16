@@ -8,6 +8,7 @@ contextBridge.exposeInMainWorld('api', {
   // Категории
   getCategories: () => ipcRenderer.invoke('cat:list'),
   addCategory: (name, color) => ipcRenderer.invoke('cat:add', name, color),
+  updateCategory: (id, name, color) => ipcRenderer.invoke('cat:update', id, name, color),
   deleteCategory: (id) => ipcRenderer.invoke('cat:delete', id),
 
   // Траты
@@ -37,5 +38,8 @@ contextBridge.exposeInMainWorld('api', {
   setSetting: (key, value) => ipcRenderer.invoke('set:set', key, value),
 
   // Статистика
-  getMonthSummary: (year, month) => ipcRenderer.invoke('stats:month', year, month)
+  getMonthSummary: (year, month) => ipcRenderer.invoke('stats:month', year, month),
+
+  // Сброс
+  resetAll: () => ipcRenderer.invoke('reset:all')
 })

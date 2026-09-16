@@ -86,6 +86,7 @@ ipcMain.handle('win:getMode', () => ({ widget: db.getSetting('widget_mode', 'fal
 // ======== IPC: КАТЕГОРИИ ========
 ipcMain.handle('cat:list', () => db.getCategories())
 ipcMain.handle('cat:add', (_, name, color) => db.createCategory(name, color))
+ipcMain.handle('cat:update', (_, id, name, color) => db.updateCategory(id, name, color))
 ipcMain.handle('cat:delete', (_, id) => db.deleteCategory(id))
 
 // ======== IPC: ТРАТЫ ========
@@ -121,6 +122,9 @@ ipcMain.handle('set:set', (_, key, value) => {
 
 // ======== IPC: СТАТИСТИКА / ИТОГИ ========
 ipcMain.handle('stats:month', (_, year, month) => db.getMonthSummary(year, month))
+
+// ======== IPC: СБРОС ========
+ipcMain.handle('reset:all', () => db.resetAll())
 
 // ======== ЖИЗНЕННЫЙ ЦИКЛ ========
 app.whenReady().then(() => {
