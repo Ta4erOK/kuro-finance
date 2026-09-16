@@ -1,0 +1,7 @@
+node_modules/
+dist/
+finance.db
+finance.db-wal
+finance.db-shm
+*.log
+.DS_Store

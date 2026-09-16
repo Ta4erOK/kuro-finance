@@ -1,0 +1,152 @@
+<script setup>
+import { ref, onMounted } from 'vue'
+import ExpensesView from './views/ExpensesView.vue'
+import SavingsView from './views/SavingsView.vue'
+import StatsView from './views/StatsView.vue'
+import SettingsView from './views/SettingsView.vue'
+
+const tab = ref('expenses')
+const monthExpenses = ref(0)
+const monthSavings = ref(0)
+const monthIncome = ref(0)
+
+async function refreshMonthHeader() {
+  try {
+    const now = new Date()
+    const s = await window.api.getMonthSummary(now.getFullYear(), now.getMonth() + 1)
+    monthExpenses.value = s.expenses
+    monthSavings.value = s.savings
+    monthIncome.value = Number(await window.api.getSetting('income', '0')) || 0
+  } catch (e) {
+    console.error('[kuro] refreshMonthHeader error:', e)
+  }
+}
+
+function formatMoney(v) {
+  return Number(v || 0).toLocaleString('ru-RU') + ' ₽'
+}
+
+function switchTab(t) {
+  tab.value = t
+  refreshMonthHeader()
+}
+
+function winMin() { window.api.winMinimize() }
+function winClose() { window.api.winClose() }
+
+onMounted(refreshMonthHeader)
+window.addEventListener('kuro:data-changed', refreshMonthHeader)
+</script>
+
+<template>
+  <div class="app">
+    <!-- Шапка -->
+    <header class="titlebar">
+      <div class="titlebar-left">
+        <div class="title-text">
+          <div class="title-name">KURO FINANCE</div>
+          <div class="title-date">{{ new Date().toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', weekday: 'short' }) }}</div>
+        </div>
+      </div>
+      <div class="titlebar-btns">
+        <button class="win-btn" @click="winMin">—</button>
+        <button class="win-btn win-close" @click="winClose">✕</button>
+      </div>
+    </header>
+
+    <!-- Сводка за месяц -->
+    <div class="month-summary">
+      <div class="ms-block">
+        <span class="ms-label">Траты</span>
+        <span class="ms-value ms-red">{{ formatMoney(monthExpenses) }}</span>
+      </div>
+      <div class="ms-divider"></div>
+      <div class="ms-block">
+        <span class="ms-label">Копилка</span>
+        <span class="ms-value ms-green">{{ formatMoney(monthSavings) }}</span>
+      </div>
+      <div class="ms-divider"></div>
+      <div class="ms-block">
+        <span class="ms-label">Доход</span>
+        <span class="ms-value">{{ formatMoney(monthIncome) }}</span>
+      </div>
+    </div>
+
+    <!-- Табы — минималистичная полоса -->
+    <nav class="tabs">
+      <button class="tab" :class="{ active: tab === 'expenses' }" @click="switchTab('expenses')">Траты</button>
+      <button class="tab" :class="{ active: tab === 'savings' }" @click="switchTab('savings')">Копилка</button>
+      <button class="tab" :class="{ active: tab === 'stats' }" @click="switchTab('stats')">Статистика</button>
+      <button class="tab" :class="{ active: tab === 'settings' }" @click="switchTab('settings')">Настр.</button>
+    </nav>
+
+    <!-- Контент -->
+    <main class="content">
+      <ExpensesView v-if="tab === 'expenses'" />
+      <SavingsView v-else-if="tab === 'savings'" />
+      <StatsView v-else-if="tab === 'stats'" />
+      <SettingsView v-else />
+    </main>
+  </div>
+</template>
+
+<style scoped>
+.app { display: flex; flex-direction: column; height: 100%; }
+
+.titlebar {
+  -webkit-app-region: drag;
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 10px 14px 4px;
+}
+.titlebar-left { display: flex; align-items: center; }
+.title-name { font-size: 14px; font-weight: 700; letter-spacing: 1px; }
+.title-date { font-size: 11px; color: var(--text-dim); text-transform: capitalize; }
+
+.titlebar-btns { -webkit-app-region: no-drag; display: flex; gap: 4px; }
+.win-btn {
+  width: 24px; height: 24px; border-radius: 6px;
+  color: var(--text-dim); font-size: 12px;
+  display: flex; align-items: center; justify-content: center;
+  transition: 0.15s;
+}
+.win-btn:hover { background: var(--bg-card); color: var(--text); }
+.win-close:hover { background: var(--red); color: #fff; }
+
+.month-summary {
+  display: flex; align-items: center; justify-content: space-around;
+  padding: 8px 14px; background: var(--bg-card); border-radius: 10px;
+  margin: 6px 10px;
+}
+.ms-block { display: flex; flex-direction: column; align-items: center; gap: 1px; flex: 1; }
+.ms-divider { width: 1px; height: 24px; background: var(--border); }
+.ms-label { font-size: 9px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.5px; }
+.ms-value { font-size: 12px; font-weight: 700; }
+.ms-red { color: var(--red); }
+.ms-green { color: var(--green); }
+
+/* Табы — горизонтальная полоса с подчёркиванием активной */
+.tabs {
+  display: flex; gap: 0; padding: 0 10px;
+  border-bottom: 1px solid var(--border);
+}
+.tab {
+  flex: 1; padding: 10px 4px; text-align: center;
+  font-size: 12px; font-weight: 500;
+  color: var(--text-dim);
+  background: transparent;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  transition: color 0.15s, border-color 0.15s;
+}
+.tab:hover { color: var(--text); }
+.tab.active {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+  font-weight: 600;
+}
+
+.content {
+  flex: 1; overflow-y: auto;
+  padding: 10px;
+}
+</style>

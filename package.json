@@ -1,0 +1,51 @@
+{
+  "name": "kuro-finance",
+  "version": "1.0.0",
+  "description": "KURO FINANCE — десктопный финансовый виджет: траты, копилка, статистика",
+  "main": "src/main/index.js",
+  "scripts": {
+    "dev": "concurrently \"vite\" \"wait-on http://localhost:5173 && electron .\"",
+    "build": "vite build",
+    "gen:icons": "node scripts/gen-icons.cjs",
+    "build:win": "vite build && electron-builder --win",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "better-sqlite3": "^11.10.0",
+    "chart.js": "^4.4.4"
+  },
+  "devDependencies": {
+    "@electron/rebuild": "^3.7.0",
+    "@vitejs/plugin-vue": "^5.1.4",
+    "concurrently": "^9.0.1",
+    "electron": "^32.1.2",
+    "electron-builder": "^25.0.5",
+    "png-to-ico": "^3.0.0",
+    "sharp": "^0.33.5",
+    "vite": "^5.4.8",
+    "vue": "^3.5.12",
+    "wait-on": "^8.0.0"
+  },
+  "build": {
+    "appId": "com.kuro.finance",
+    "productName": "KURO Finance",
+    "directories": {
+      "output": "release"
+    },
+    "win": {
+      "target": "nsis",
+      "icon": "build/icon.ico"
+    },
+    "nsis": {
+      "oneClick": true,
+      "perMachine": false,
+      "artifactName": "kuro-finance-setup-${version}.exe"
+    },
+    "files": [
+      "dist/**/*",
+      "build/icon.ico",
+      "src/main/**/*",
+      "src/db/**/*"
+    ]
+  }
+}
