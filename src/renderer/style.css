@@ -15,6 +15,8 @@
   --text: #e2e8f0;
   --text-dim: #94a3b8;
   --border: #3f3f5a;
+  --grad-soft: linear-gradient(135deg, #2d2d44, #1f2740);
+  --grad-strong: linear-gradient(135deg, #3b2d74, #1f2740);
 }
 
 [data-theme="light"] {
@@ -24,6 +26,8 @@
   --text: #1e293b;
   --text-dim: #64748b;
   --border: #e2e8f0;
+  --grad-soft: linear-gradient(135deg, #a78bfa, #8b5cf6);
+  --grad-strong: linear-gradient(135deg, #8b5cf6, #6d28d9);
 }
 
 html, body, #app {

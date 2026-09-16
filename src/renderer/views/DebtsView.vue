@@ -172,24 +172,17 @@ onMounted(load)
 
 <style scoped>
 .debts-view {
-  --bg: #1a1d28;
-  --bg-input: #252836;
-  --border: #363a4f;
-  --accent: #6c5ce7;
-  --green: #2ed573;
-  --red: #ff4757;
-  --text: #e4e6f0;
-  --text-dim: #8b8fa3;
-
   padding: 12px;
   display: flex;
   flex-direction: column;
   gap: 10px;
   color: var(--text);
+  overflow-x: hidden;
+  min-width: 0;
 }
 
 .summary-card {
-  background: linear-gradient(135deg, #3b2d74, #1f2740);
+  background: var(--grad-strong);
   border-radius: 10px;
   padding: 16px;
   text-align: center;

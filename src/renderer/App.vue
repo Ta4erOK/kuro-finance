@@ -214,7 +214,8 @@ window.addEventListener('kuro:data-changed', refreshMonthHeader)
 }
 
 .content {
-  flex: 1; overflow-y: auto;
+  flex: 1; overflow-y: auto; overflow-x: hidden;
   padding: 10px;
+  min-width: 0;
 }
 </style>

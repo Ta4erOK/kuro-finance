@@ -45,6 +45,7 @@
     "files": [
       "dist/**/*",
       "build/icon.ico",
+      "build/icon-256.png",
       "src/main/**/*",
       "src/db/**/*"
     ]

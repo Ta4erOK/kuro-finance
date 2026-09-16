@@ -10,14 +10,15 @@ const DEV_URL = 'http://localhost:5173'
 
 // ======== Иконка для трея ========
 const ICON_PATH = path.join(__dirname, '..', '..', 'build', 'icon-256.png')
+const ICON_FALLBACK = path.join(__dirname, '..', '..', 'build', 'icon.ico')
 
 // ======== СОЗДАНИЕ ОКНА ========
 function createWindow() {
   mainWindow = new BrowserWindow({
-    width: 420,
-    height: 640,
-    minWidth: 380,
-    minHeight: 500,
+    width: 440,
+    height: 660,
+    minWidth: 400,
+    minHeight: 560,
     frame: false,
     transparent: false,
     resizable: true,
@@ -69,7 +70,10 @@ function createWindow() {
 function initTray() {
   if (tray) return
   try {
-    tray = new Tray(ICON_PATH)
+    const fs = require('fs')
+    const iconPath = fs.existsSync(ICON_PATH) ? ICON_PATH : ICON_FALLBACK
+    if (!fs.existsSync(iconPath)) { console.error('[kuro] tray: no icon found'); return }
+    tray = new Tray(iconPath)
     tray.setToolTip('KURO FINANCE')
     updateTrayMenu()
     tray.on('click', () => {
@@ -161,12 +165,12 @@ function applyWidgetMode(widgetOn) {
   if (widgetOn === 'true') {
     mainWindow.setAlwaysOnTop(true, 'screen-saver')
     mainWindow.setResizable(false)
-    mainWindow.setMinimumSize(300, 480)
-    mainWindow.setMaximumSize(360, 560)
+    mainWindow.setMinimumSize(340, 520)
+    mainWindow.setMaximumSize(400, 580)
   } else {
     mainWindow.setAlwaysOnTop(false)
     mainWindow.setResizable(true)
-    mainWindow.setMinimumSize(380, 500)
+    mainWindow.setMinimumSize(400, 560)
     mainWindow.setMaximumSize(9999, 9999)
   }
 }

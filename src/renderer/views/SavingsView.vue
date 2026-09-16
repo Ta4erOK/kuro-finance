@@ -248,15 +248,6 @@ export default { name: 'SavingsView' }
 
 <style scoped>
 .savings-view {
-  --bg: #1a1d28;
-  --bg-input: #252836;
-  --border: #363a4f;
-  --accent: #6c5ce7;
-  --green: #2ed573;
-  --red: #ff4757;
-  --text: #e4e6f0;
-  --text-dim: #8b8fa3;
-
   padding: 16px;
   max-width: 600px;
   margin: 0 auto;
@@ -265,10 +256,12 @@ export default { name: 'SavingsView' }
   gap: 16px;
   font-family: inherit;
   color: var(--text);
+  overflow-x: hidden;
+  min-width: 0;
 }
 
 .total-card {
-  background: linear-gradient(135deg, #2d2d44, #1f2740);
+  background: var(--grad-soft);
   border-radius: 12px;
   padding: 20px;
   text-align: center;
@@ -319,6 +312,7 @@ export default { name: 'SavingsView' }
 
 .goal-edit-form {
   margin-top: 6px;
+  flex-wrap: wrap;
 }
 
 .goal-item {
@@ -392,6 +386,7 @@ export default { name: 'SavingsView' }
   font-size: 13px;
   outline: none;
   flex: 1;
+  min-width: 0;
 }
 
 .input:focus {
